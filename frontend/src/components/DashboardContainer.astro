@@ -67,7 +67,7 @@ import AITextToRule from './AITextToRule.astro';
     <div class="header-right-content">
       <!-- Placeholder for interesting content -->
       <p>System Status: <span style="color: #4CAF50;">Operational</span></p>
-      <p>Active Alerts: <span style="color: #FFC107;">3</span></p>
+      <p>Active Alerts: <span id="active-alerts-count" style="color: #FFC107;">0</span></p>
     </div>
     </header>
 
@@ -75,10 +75,6 @@ import AITextToRule from './AITextToRule.astro';
 
     <div id="dashboard-content">
       <RealtimeAnalysis />
-    </div>
-
-    <div id="threat-detections-content" style="display:none;">
-      <ThreatDetections />
     </div>
 
     <div id="threat-detections-content" style="display:none;">
@@ -105,6 +101,7 @@ import AITextToRule from './AITextToRule.astro';
     const threatDetectionsContent = document.getElementById('threat-detections-content');
     const detectionRulesContent = document.getElementById('detection-rules-content');
     const aiTextToRuleContent = document.getElementById('ai-text-to-rule-content');
+    const activeAlertsSpan = document.getElementById('active-alerts-count');
 
     const allContentSections = [dashboardContent, threatDetectionsContent, detectionRulesContent, aiTextToRuleContent];
     const allNavLinks = [dashboardLink, detectionRulesLink, aiTextToRuleLink];
@@ -141,6 +138,13 @@ import AITextToRule from './AITextToRule.astro';
     aiTextToRuleLink.addEventListener('click', (e) => {
       e.preventDefault();
       showContent(aiTextToRuleContent, aiTextToRuleLink);
+    });
+
+    // Listen for custom event to update active alerts
+    document.addEventListener('totalAlertsUpdated', (event) => {
+      if (activeAlertsSpan) {
+        activeAlertsSpan.textContent = event.detail.totalAlerts;
+      }
     });
   });
 </script>

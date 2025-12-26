@@ -158,6 +158,13 @@
     let logData = [];
     let processedLogCount = 0;
     let totalLogEntries = 0;
+    let totalActiveAlerts = 0; // New variable to track total active alerts
+
+    // Function to dispatch total active alerts
+    const dispatchTotalAlerts = (count) => {
+      const event = new CustomEvent('totalAlertsUpdated', { detail: { totalAlerts: count } });
+      document.dispatchEvent(event);
+    };
 
     // Fetch log data from public/data/example_log.txt
     async function fetchLogData() {
@@ -177,13 +184,40 @@
       logFileUpload.click(); // Trigger the hidden file input
     });
 
-    logFileUpload.addEventListener('change', (event) => {
+    logFileUpload.addEventListener('change', async (event) => {
       const file = event.target.files[0];
       if (file) {
         console.log('Selected file:', file.name);
-        // Here you would typically send the file to the backend for processing
-        // For now, we'll just log the file name.
-        alert(`File selected: ${file.name}. In a real application, this would be uploaded to the backend.`);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const logContent = e.target.result;
+          try {
+            const response = await fetch('/api/logs/upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'text/plain',
+              },
+              body: logContent,
+            });
+            if (response.ok) {
+              const alerts = await response.json();
+              console.log('Upload successful, alerts:', alerts);
+              // Here you would update your frontend to display the alerts
+              alert(`File ${file.name} uploaded and processed. Detected ${alerts.length} alerts.`);
+              // You might want to update the metrics table here based on the alerts
+              // For now, let's just simulate a sequential run with the alerts count
+              updateMetrics('Sequential', logContent.split('\n').filter(line => line.trim() !== '').length, 0, alerts.length, 100);
+            } else {
+              const errorText = await response.text();
+              console.error('Upload failed:', response.status, errorText);
+              alert(`Failed to upload file: ${errorText}`);
+            }
+          } catch (error) {
+            console.error('Error during file upload:', error);
+            alert('Error during file upload.');
+          }
+        };
+        reader.readAsText(file);
       }
     });
 
@@ -236,7 +270,7 @@
     };
 
     // Simulate processing
-    const simulateProcessing = (mode) => {
+    const simulateProcessing = async (mode) => {
       resetMetrics(mode); // Reset metrics for the current mode before starting
 
       const buttons = {
@@ -258,33 +292,40 @@
       button.disabled = true;
 
       const startTime = performance.now();
-      let logsProcessedThisRun = 0;
       let alertsDetectedThisRun = 0;
-      processedLogCount = 0; // Reset for each run
 
-      const processChunk = () => {
-        const chunkSize = Math.min(totalLogEntries - processedLogCount, getRandomNumber(5, 15)); // Process a chunk of logs
-        if (chunkSize === 0) {
-          clearInterval(processingInterval);
-          button.innerHTML = originalText;
-          button.disabled = false;
-          updateMetrics(mode, logsProcessedThisRun, performance.now() - startTime, alertsDetectedThisRun, 100); // Ensure progress is 100% at end
-          return;
+      try {
+        const logEntriesForBackend = logData.map(line => ({
+          timestamp: new Date().toISOString(), // Use ISO string for timestamp
+          details: line
+        }));
+
+        const response = await fetch(`/api/analyze/${mode.toLowerCase()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(logEntriesForBackend),
+        });
+
+        if (response.ok) {
+          const alerts = await response.json();
+          alertsDetectedThisRun = alerts.length;
+          console.log(`${mode} processing successful, alerts:`, alerts);
+        } else {
+          const errorText = await response.text();
+          console.error(`${mode} processing failed:`, response.status, errorText);
+          alert(`${mode} processing failed: ${errorText}`);
         }
-
-        for (let i = 0; i < chunkSize; i++) {
-          const logEntry = logData[processedLogCount];
-          if (logEntry && (logEntry.includes('ERROR') || logEntry.includes('SECURITY'))) {
-            alertsDetectedThisRun++;
-          }
-          processedLogCount++;
-          logsProcessedThisRun++;
-        }
-        const progress = (processedLogCount / totalLogEntries) * 100;
-        updateMetrics(mode, logsProcessedThisRun, performance.now() - startTime, alertsDetectedThisRun, progress);
-      };
-
-      const processingInterval = setInterval(processChunk, 100); // Simulate processing chunks every 100ms
+      } catch (error) {
+        console.error(`Error during ${mode} processing:`, error);
+        alert(`Error during ${mode} processing.`);
+      } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        const timeTaken = performance.now() - startTime;
+        updateMetrics(mode, logData.length, timeTaken, alertsDetectedThisRun, 100);
+      }
     };
 
     // Update metrics after processing
@@ -327,6 +368,15 @@
       
       alertTextElement.textContent = currentAlerts > 0 ? 'Alerts detected' : 'No alerts';
 
+      // Update total active alerts and dispatch event
+      const allAlertCounts = [
+        parseInt(document.getElementById('sequential-row').querySelector('.alert-count').textContent) || 0,
+        parseInt(document.getElementById('parallel-row').querySelector('.alert-count').textContent) || 0,
+        parseInt(document.getElementById('distributed-row').querySelector('.alert-count').textContent) || 0,
+      ];
+      totalActiveAlerts = allAlertCounts.reduce((sum, count) => sum + count, 0);
+      dispatchTotalAlerts(totalActiveAlerts);
+
       // Update progress bar
       if (progressBar) {
         progressBar.style.width = `${progress}%`;
@@ -334,29 +384,57 @@
     };
 
     // AI Explanation
-    const showAIExplanation = () => {
-      const explanation = `
-        Current Performance Analysis:
-        
-        • Distributed Mode leads with high logs/sec throughput
-        • Parallel processing provides significant speed improvement over sequential
-        • Real-time monitoring indicates system is operating within optimal parameters
-        
-        Recommendations:
-        1. Continue with distributed cluster for large-scale processing
-        2. Monitor resource utilization during peak loads
-        3. Consider scaling worker nodes for increased log volume
-        
-        System Health: Optimal ✅
+    const showAIExplanation = async () => {
+      aiExplanationBtn.innerHTML = `
+        <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+        </svg>
+        Generating Explanation...
       `;
-      
-      alert('AI Analysis Report:\n\n' + explanation);
+      aiExplanationBtn.disabled = true;
+
+      try {
+        const logEntriesForBackend = logData.map(line => ({
+          timestamp: new Date().toISOString(),
+          details: line
+        }));
+
+        const response = await fetch('/api/analyze/explain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(logEntriesForBackend),
+        });
+
+        if (response.ok) {
+          const explanation = await response.json();
+          alert('AI Analysis Report:\n\n' + explanation.explanation);
+        } else {
+          const errorText = await response.text();
+          console.error('AI Explanation failed:', response.status, errorText);
+          alert(`AI Explanation failed: ${errorText}`);
+        }
+      } catch (error) {
+        console.error('Error during AI Explanation:', error);
+        alert('Error during AI Explanation.');
+      } finally {
+        aiExplanationBtn.innerHTML = `
+          <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5a3 3 0 1 0-3 3"></path>
+            <path d="M12 5a3 3 0 1 1 3 3"></path>
+            <path d="M12 7a6 6 0 0 1 6 6v3a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2 1 1 0 0 1-1-1V7a3 3 0 0 0-3-3H8a3 3 0 0 0-3 3v1a1 1 0 0 1-1 1 2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2v-3a6 6 0 0 1 6-6z"></path>
+          </svg>
+          Get AI Explanation
+        `;
+        aiExplanationBtn.disabled = false;
+      }
     };
 
     // Event listeners
     if (runSequentialBtn) runSequentialBtn.addEventListener('click', () => simulateProcessing('Sequential'));
-    if (runParallelBtn) runParallelBtn.addEventListener('click', () => simulateProcessing('Parallel', 1500));
-    if (runDistributedBtn) runDistributedBtn.addEventListener('click', () => simulateProcessing('Distributed', 1000));
+    if (runParallelBtn) runParallelBtn.addEventListener('click', () => simulateProcessing('Parallel'));
+    if (runDistributedBtn) runDistributedBtn.addEventListener('click', () => simulateProcessing('Distributed'));
     if (aiExplanationBtn) aiExplanationBtn.addEventListener('click', showAIExplanation);
 
     // Initial fetch of log data

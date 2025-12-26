@@ -11,6 +11,9 @@ mod parallel_analysis;
 mod distributed_analysis;
 mod utils;
 mod server;
+mod rules_engine;
+mod log_processor;
+mod ai_module;
 
 use models::{LogEntry, Rule, Metrics};
 use log_parser::parse_log_entry;
@@ -18,6 +21,9 @@ use sequential_analysis::run_sequential_analysis;
 use parallel_analysis::run_parallel_analysis;
 use distributed_analysis::run_master;
 use utils::Timer;
+use rules_engine::RulesEngine;
+use log_processor::{process_sequential, process_parallel, process_distributed};
+use std::sync::{Arc, Mutex};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -41,11 +47,15 @@ fn read_log_file(filename: &Path) -> io::Result<Vec<String>> {
     Ok(reader.lines().filter_map(|line| line.ok()).collect())
 }
 
-fn read_rules_file(filename: &Path) -> io::Result<Vec<Rule>> {
+fn read_rules_file_content(filename: &Path) -> io::Result<String> {
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
-    let rules: Vec<Rule> = serde_json::from_reader(reader)?;
-    Ok(rules)
+    let mut content = String::new();
+    for line in reader.lines() {
+        content.push_str(&line?);
+        content.push('\n');
+    }
+    Ok(content)
 }
 
 #[tokio::main]
@@ -60,8 +70,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Loaded {} log entries.", log_lines.len());
 
             println!("Loading rules file: {}", args.rules_file);
-            let rules = read_rules_file(Path::new(&args.rules_file))?;
-            println!("Loaded {} rules.", rules.len());
+            let rules_json = read_rules_file_content(Path::new(&args.rules_file))?;
+            let mut rules_engine = RulesEngine::new();
+            rules_engine.load_rules(&rules_json).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            println!("Loaded {} rules.", rules_engine.rules.len());
 
             let metrics: Metrics;
 
@@ -73,27 +85,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let parsed_logs: Vec<LogEntry> = log_lines.iter()
                         .filter_map(|line| parse_log_entry(line).ok())
                         .collect();
-                    metrics = run_sequential_analysis(parsed_logs, rules);
+                    metrics = process_sequential(parsed_logs, Arc::new(Mutex::new(rules_engine)));
                     let elapsed_time_ms = timer.elapsed_millis();
-                    metrics.execution_time_ms = elapsed_time_ms;
-                    metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
+                    // metrics.execution_time_ms = elapsed_time_ms;
+                    // metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
                 },
                 "parallel" => {
                     println!("Running parallel analysis...");
                     let parsed_logs: Vec<LogEntry> = log_lines.iter()
                         .filter_map(|line| parse_log_entry(line).ok())
                         .collect();
-                    metrics = run_parallel_analysis(parsed_logs, rules);
+                    metrics = process_parallel(parsed_logs, Arc::new(Mutex::new(rules_engine)));
                     let elapsed_time_ms = timer.elapsed_millis();
-                    metrics.execution_time_ms = elapsed_time_ms;
-                    metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
+                    // metrics.execution_time_ms = elapsed_time_ms;
+                    // metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
                 },
                 "distributed" => {
                     println!("Running distributed analysis with {} workers...", args.workers);
-                    metrics = run_master(log_lines, rules, args.workers).await?;
+                    metrics = process_distributed(log_lines, Arc::new(Mutex::new(rules_engine)));
                     let elapsed_time_ms = timer.elapsed_millis();
-                    metrics.execution_time_ms = elapsed_time_ms;
-                    metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
+                    // metrics.execution_time_ms = elapsed_time_ms;
+                    // metrics.logs_per_second = (metrics.total_logs_processed as f64 / elapsed_time_ms as f64) * 1000.0;
+                },
                 _ => {
                     eprintln!("Invalid analysis mode: {}. Please choose from 'sequential', 'parallel', or 'distributed'.", args.mode);
                     std::process::exit(1);
@@ -102,8 +115,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("\n--- Analysis Results ({}) ---", metrics.mode);
             println!("Total logs processed: {}", metrics.total_logs_processed);
-            println!("Execution time: {} ms", metrics.execution_time_ms);
-            println!("Logs per second: {:.2}", metrics.logs_per_second);
+            // println!("Execution time: {} ms", metrics.execution_time_ms);
+            // println!("Logs per second: {:.2}", metrics.logs_per_second);
             println!("Total alerts generated: {}", metrics.alerts_generated.len());
 
             if !metrics.alerts_generated.is_empty() {
@@ -115,7 +128,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         "server" => {
             println!("Starting web server on 127.0.0.1:8080...");
-            server::run_server().await?;
+            let rules_engine = Arc::new(Mutex::new(RulesEngine::new()));
+            server::run_server(rules_engine).await?;
         },
         _ => {
             eprintln!("Invalid mode: {}. Please choose from 'analysis' or 'server'.", args.mode);

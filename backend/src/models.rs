@@ -5,17 +5,14 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogEntry {
     pub timestamp: DateTime<Utc>,
-    pub ip_address: String,
-    pub user_id: Option<String>,
-    pub event_type: String,
-    pub details: HashMap<String, String>,
+    pub details: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AlertType {
     BruteForce,
     HighFrequencyRequest,
-    SuspiciousIpBehavior,
+    SuspiciousActivity,
     Custom(String),
 }
 
@@ -37,19 +34,12 @@ pub struct Metrics {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Rule {
+    pub id: String,
     pub name: String,
+    pub pattern: String, // Regex pattern to match against log entry details
     pub description: String,
-    pub rule_type: RuleType,
-    pub threshold: usize,
-    pub time_window_seconds: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum RuleType {
-    BruteForce,
-    HighFrequencyRequest,
-    SuspiciousIp,
-    Custom(String),
+    pub alert_type: AlertType,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

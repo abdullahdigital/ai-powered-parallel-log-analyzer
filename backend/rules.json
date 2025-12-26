@@ -1,0 +1,42 @@
+[
+  {
+    "id": "rule_001",
+    "name": "Failed Login Attempt",
+    "pattern": ".*failed password.*|.*authentication failure.*",
+    "description": "Detects common patterns indicating a failed login attempt.",
+    "alert_type": "BruteForce",
+    "enabled": true
+  },
+  {
+    "id": "rule_002",
+    "name": "Access Denied",
+    "pattern": ".*access denied.*|.*permission denied.*",
+    "description": "Triggers when a user or process is denied access to a resource.",
+    "alert_type": "SuspiciousActivity",
+    "enabled": true
+  },
+  {
+    "id": "rule_003",
+    "name": "SQL Injection Attempt",
+    "pattern": ".*(\\'|\\\")OR(\\'|\\\")1(=|%3D)1.*|.*SELECT.*FROM.*",
+    "description": "Identifies potential SQL injection attempts in log entries.",
+    "alert_type": "HighFrequencyRequest",
+    "enabled": true
+  },
+  {
+    "id": "rule_004",
+    "name": "Port Scan Detected",
+    "pattern": ".*Nmap.*|.*port scan.*",
+    "description": "Alerts on logs indicating a port scan activity.",
+    "alert_type": "SuspiciousActivity",
+    "enabled": true
+  },
+  {
+    "id": "rule_005",
+    "name": "Unusual High Traffic",
+    "pattern": ".*high traffic alert.*|.*DoS attack.*",
+    "description": "Detects logs related to unusually high network traffic or DoS attacks.",
+    "alert_type": "HighFrequencyRequest",
+    "enabled": false
+  }
+]
