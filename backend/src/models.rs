@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogEntry {
     pub timestamp: DateTime<Utc>,
+    pub ip_address: Option<String>,
+    pub user_id: Option<String>,
+    pub event_type: String,
     pub details: String,
 }
 
@@ -28,8 +31,18 @@ pub struct Alert {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Metrics {
     pub total_logs_processed: usize,
+    pub execution_time_ms: u128,
+    pub logs_per_second: f64,
     pub alerts_generated: Vec<Alert>,
     pub mode: String, // Sequential, Parallel, Distributed
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum RuleType {
+    BruteForce,
+    HighFrequencyRequest,
+    SuspiciousIp,
+    Custom(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -40,6 +53,9 @@ pub struct Rule {
     pub description: String,
     pub alert_type: AlertType,
     pub enabled: bool,
+    pub rule_type: RuleType,
+    pub time_window_seconds: Option<u64>,
+    pub threshold: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

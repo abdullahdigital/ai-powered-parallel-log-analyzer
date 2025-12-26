@@ -18,7 +18,7 @@ pub fn parse_log_entry(line: &str) -> Option<LogEntry> {
 
     let mut user_id: Option<String> = None;
     let mut event_type: Option<String> = None;
-    let mut details: HashMap<String, String> = HashMap::new();
+    let mut details_str: Option<String> = None;
 
     for part in sub_parts {
         if part.starts_with("user_id=") {
@@ -26,10 +26,7 @@ pub fn parse_log_entry(line: &str) -> Option<LogEntry> {
         } else if part.starts_with("event=") {
             event_type = Some(part.trim_start_matches("event=").to_string());
         } else if part.starts_with("details=") {
-            let json_str = part.trim_start_matches("details=");
-            if let Ok(parsed_details) = serde_json::from_str(json_str) {
-                details = parsed_details;
-            }
+            details_str = Some(part.trim_start_matches("details=").to_string());
         }
     }
 
@@ -38,6 +35,6 @@ pub fn parse_log_entry(line: &str) -> Option<LogEntry> {
         ip_address,
         user_id,
         event_type: event_type.unwrap_or_else(|| "unknown".to_string()),
-        details,
+        details: details_str.unwrap_or_else(|| "{}".to_string()),
     })
 }

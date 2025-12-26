@@ -1,10 +1,9 @@
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use serde::{Serialize, Deserialize};
-use crate::models::{LogEntry, Rule, Metrics, Alert, WorkerMessage, MasterMessage};
-use crate::threat_detection::ThreatDetector;
-use std::error::Error;
+use crate::models::{Metrics, Alert, WorkerMessage, MasterMessage};
 use std::sync::{Arc, Mutex};
+use std::error::Error;
 
 pub async fn run_worker(worker_id: usize) -> Result<(), Box<dyn Error>> {
     let addr = format!("127.0.0.1:{}", 8081 + worker_id as u16);

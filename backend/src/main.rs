@@ -19,7 +19,7 @@ use models::{LogEntry, Rule, Metrics};
 use log_parser::parse_log_entry;
 use sequential_analysis::run_sequential_analysis;
 use parallel_analysis::run_parallel_analysis;
-use distributed_analysis::run_master;
+
 use utils::Timer;
 use rules_engine::RulesEngine;
 use log_processor::{process_sequential, process_parallel, process_distributed};

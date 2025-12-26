@@ -1,7 +1,7 @@
 use crate::models::{LogEntry, Alert, Metrics, Rule};
-use crate::log_parser::parse_log_entry;
+
 use crate::threat_detection::ThreatDetector;
-use std::time::Instant;
+
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 

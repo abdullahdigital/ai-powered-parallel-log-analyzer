@@ -1,10 +1,8 @@
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use serde::{Deserialize, Serialize};
 use crate::models::{LogEntry, Alert, Metrics, Rule, WorkerMessage, MasterMessage};
-use std::sync::Arc;
 use std::time::Instant;
-use crate::log_parser::parse_log_entry;
+use chrono::{Utc};
 
 const WORKER_PORT: u16 = 8081;
 
@@ -43,7 +41,11 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
         let chunk = log_lines[start_index..end_index].to_vec();
 
         let handle = tokio::spawn(async move {
-            let log_chunk_message = WorkerMessage::LogChunk(chunk);
+            let log_entries_chunk: Vec<LogEntry> = chunk.into_iter().map(|line| LogEntry {
+                timestamp: Utc::now(), // Assign current UTC timestamp
+                details: line,
+            }).collect();
+            let log_chunk_message = WorkerMessage::LogChunk(log_entries_chunk);
             let serialized_chunk = serde_json::to_vec(&log_chunk_message)?;
             stream.write_all(&(serialized_chunk.len() as u32).to_le_bytes()).await?;
             stream.write_all(&serialized_chunk).await?;
@@ -57,12 +59,12 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
             let worker_ack: MasterMessage = serde_json::from_slice(&buffer)?;
             match worker_ack {
                 MasterMessage::Ack => println!("Worker acknowledged log chunk."),
-                _ => return Err(Box::<dyn std::error::Error>::from("Unexpected worker response after log chunk.")),
+                _ => return Err(Box::<dyn std::error::Error + Send + Sync>::from("Unexpected worker response after log chunk.")),
             }
 
             // Store the stream to send shutdown later
             Ok(stream)
-        });
+        }) as tokio::task::JoinHandle<Result<tokio::net::TcpStream, Box<dyn std::error::Error + Send + Sync>>>;
         handles.push(handle);
     }
 

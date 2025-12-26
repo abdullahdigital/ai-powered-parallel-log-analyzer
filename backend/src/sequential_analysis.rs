@@ -1,7 +1,5 @@
 use crate::models::{LogEntry, Alert, Metrics, Rule};
-use crate::log_parser::parse_log_entry;
 use crate::threat_detection::ThreatDetector;
-use std::time::Instant;
 
 pub fn run_sequential_analysis(parsed_logs: Vec<LogEntry>, rules: Vec<Rule>) -> Metrics {
     let mut alerts: Vec<Alert> = Vec::new();
