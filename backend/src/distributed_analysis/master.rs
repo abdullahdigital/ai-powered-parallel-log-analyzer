@@ -42,11 +42,10 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
 
         let handle = tokio::spawn(async move {
             let log_entries_chunk: Vec<LogEntry> = chunk.into_iter().map(|line| LogEntry {
-                timestamp: Utc::now(), // Assign current UTC timestamp
+                timestamp: Some(Utc::now()), // Assign current UTC timestamp
                 ip_address: None,
                 user_id: None,
-                event_type: "unknown".to_string(),
-                details: line,
+                raw_log: line.to_string(),
             }).collect();
             let log_chunk_message = WorkerMessage::LogChunk(log_entries_chunk);
             let serialized_chunk = serde_json::to_vec(&log_chunk_message)?;

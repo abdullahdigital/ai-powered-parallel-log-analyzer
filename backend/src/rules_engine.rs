@@ -43,7 +43,7 @@ impl RulesEngine {
                 }
             };
 
-            if re.is_match(&log_entry.details) {
+            if re.is_match(&log_entry.raw_log) {
                 alerts.push(Alert {
                     id: Uuid::new_v4().to_string(),
                     timestamp: Utc::now(),

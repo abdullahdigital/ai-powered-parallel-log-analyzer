@@ -1,7 +1,7 @@
 use crate::models::{LogEntry, Alert, Metrics, ParsingRule};
 use crate::rules_engine::RulesEngine;
 use std::sync::{Arc, Mutex};
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc, Duration, TimeZone};
 use regex::Regex;
 use std::collections::HashMap;
 

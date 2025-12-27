@@ -11,11 +11,11 @@ pub fn explain_log_entry(log_entry: &LogEntry) -> AiExplanation {
     let mut explanation = String::new();
     let mut suggested_rules = Vec::new();
 
-    let details = &log_entry.details;
+    let raw_log = &log_entry.raw_log;
 
-    if details.contains("ERROR") || details.contains("failed") {
+    if raw_log.contains("ERROR") || raw_log.contains("failed") {
         explanation.push_str("This log entry indicates an error or a failure event. It's critical and requires immediate attention.");
-        if details.contains("authentication") {
+        if raw_log.contains("authentication") {
             explanation.push_str(" Specifically, it seems to be an authentication failure, possibly due to incorrect credentials or an unauthorized access attempt.");
             suggested_rules.push(Rule { 
                 id: "auth_fail_rule".to_string(), 
@@ -28,7 +28,7 @@ pub fn explain_log_entry(log_entry: &LogEntry) -> AiExplanation {
                 alert_type: crate::models::AlertType::BruteForce,
                 enabled: true,
             });
-        } else if details.contains("connection refused") {
+        } else if raw_log.contains("connection refused") {
             explanation.push_str(" The error suggests a connection issue, where a client was unable to establish a connection to a service.");
             suggested_rules.push(Rule { 
                 id: "conn_refused_rule".to_string(), 
@@ -42,14 +42,14 @@ pub fn explain_log_entry(log_entry: &LogEntry) -> AiExplanation {
                 enabled: true,
             });
         }
-    } else if details.contains("WARN") || details.contains("warning") {
+    } else if raw_log.contains("WARN") || raw_log.contains("warning") {
         explanation.push_str("This log entry indicates a warning. While not critical, it suggests a potential issue that might lead to problems if not addressed.");
-    } else if details.contains("INFO") || details.contains("success") {
+    } else if raw_log.contains("INFO") || raw_log.contains("success") {
         explanation.push_str("This is an informational log entry, indicating a normal operation or a successful event.");
-        if details.contains("login successful") {
+        if raw_log.contains("login successful") {
             explanation.push_str(" A user has successfully logged in.");
         }
-    } else if details.contains("denied") || details.contains("unauthorized") {
+    } else if raw_log.contains("denied") || raw_log.contains("unauthorized") {
         explanation.push_str("This log entry indicates an access control issue, where an operation was denied due to insufficient permissions or unauthorized access.");
         suggested_rules.push(Rule { 
             id: "access_denied_rule".to_string(), 
@@ -65,7 +65,7 @@ pub fn explain_log_entry(log_entry: &LogEntry) -> AiExplanation {
     }
 
     if explanation.is_empty() {
-        explanation.push_str(&format!("This log entry: \"{}\" does not match any specific known patterns, but appears to be a general system message.", details));
+        explanation.push_str(&format!("This log entry: \"{}\" does not match any specific known patterns, but appears to be a general system message.", raw_log));
     }
 
     AiExplanation {

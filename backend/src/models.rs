@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
