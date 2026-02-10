@@ -104,6 +104,8 @@
         </td>
       </tr>
     </tbody>
+  </table>
+
   <div class="action-buttons">
     <button class="action-btn secondary" id="run-sequential-btn">
       <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -135,16 +137,30 @@
     <input type="file" id="log-file-upload" accept=".log,.txt" style="display: none;"/>
     <button class="action-btn primary" id="upload-log-btn">
       <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21.2 15.8v-1.4c0-1.3-.8-2.5-2-3.1l-1.2-.6c-.6-.3-1-.9-1-1.6V7.5c0-.8-.6-1.5-1.4-1.5h-2.8c-.8 0-1.4.7-1.4 1.5v1.6c0 .7-.4 1.3-1 1.6l-1.2.6c-1.2.6-2 1.8-2 3.1v1.4c0 1.3.8 2.5 2 3.1l1.2.6c.6.3 1 .9 1 1.6v1.6c0 .8.6 1.5 1.4 1.5h2.8c.8 0 1.4-.7 1.4-1.5v-1.6c0-.7.4-1.3 1-1.6l1.2-.6c1.2-.6 2-1.8 2-3.1z"/>
-        <path d="M12 18v-6"/>
-        <path d="M9 15l3-3 3 3"/>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
       Upload Log File
     </button>
   </div>
 
-
+  <div id="file-info-badge" class="file-info-badge" style="display: none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+      <polyline points="13 2 13 9 20 9"></polyline>
+    </svg>
+    <span id="uploaded-filename">No file selected</span>
+    <span class="file-size" id="uploaded-filesize"></span>
+  </div>
 </section>
+
+<div class="uploaded-content-section" id="uploaded-content-section" style="display: none; margin-top: 25px;">
+  <div class="section-title" style="font-size: 14px; margin-bottom: 10px; color: var(--text-secondary);">UPLOADED LOG CONTENT</div>
+  <pre id="log-content-display" class="log-content-display"></pre>
+</div>
+
+
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -191,6 +207,31 @@
         const reader = new FileReader();
         reader.onload = async (e) => {
           const logContent = e.target.result;
+          
+          // Update global logData so subsequent "Run" buttons use this data
+          logData = logContent.split('\n').filter(line => line.trim() !== '');
+          totalLogEntries = logData.length;
+          console.log(`Updated logData with ${totalLogEntries} entries from upload.`);
+
+          // Show file info badge
+          const fileBadge = document.getElementById('file-info-badge');
+          const fileNameSpan = document.getElementById('uploaded-filename');
+          const fileSizeSpan = document.getElementById('uploaded-filesize');
+          if (fileBadge && fileNameSpan && fileSizeSpan) {
+            fileNameSpan.textContent = file.name;
+            const sizeInKb = (file.size / 1024).toFixed(2);
+            fileSizeSpan.textContent = `(${sizeInKb} KB)`;
+            fileBadge.style.display = 'flex';
+          }
+
+          // Display the content
+          const contentDisplay = document.getElementById('log-content-display');
+          const contentSection = document.getElementById('uploaded-content-section');
+          if (contentDisplay && contentSection) {
+            contentDisplay.textContent = logContent;
+            contentSection.style.display = 'block';
+          }
+
           try {
             const response = await fetch('/api/logs/upload', {
               method: 'POST',
@@ -200,13 +241,12 @@
               body: logContent,
             });
             if (response.ok) {
-              const alerts = await response.json();
-              console.log('Upload successful, alerts:', alerts);
-              // Here you would update your frontend to display the alerts
-              alert(`File ${file.name} uploaded and processed. Detected ${alerts.length} alerts.`);
-              // You might want to update the metrics table here based on the alerts
-              // For now, let's just simulate a sequential run with the alerts count
-              updateMetrics('Sequential', logContent.split('\n').filter(line => line.trim() !== '').length, 0, alerts.length, 100);
+              const metrics = await response.json(); // Response is a Metrics object
+              console.log('Log file uploaded to server successfully.');
+              
+              // alert(`File ${file.name} uploaded. Press a run button to start analysis.`);
+              
+              // We don't update metrics table here anymore, wait for button press
             } else {
               const errorText = await response.text();
               console.error('Upload failed:', response.status, errorText);
@@ -269,6 +309,8 @@
       }
     };
 
+    let lastRunMetrics = null;
+
     // Simulate processing
     const simulateProcessing = async (mode) => {
       resetMetrics(mode); // Reset metrics for the current mode before starting
@@ -292,12 +334,11 @@
       button.disabled = true;
 
       const startTime = performance.now();
-      let alertsDetectedThisRun = 0;
-
+      
       try {
         const logEntriesForBackend = logData.map(line => ({
           timestamp: new Date().toISOString(), // Use ISO string for timestamp
-          details: line
+          raw_log: line // Changed from 'details' to 'raw_log' to match backend struct
         }));
 
         const response = await fetch(`/api/analyze/${mode.toLowerCase()}`, {
@@ -309,9 +350,28 @@
         });
 
         if (response.ok) {
-          const alerts = await response.json();
-          alertsDetectedThisRun = alerts.length;
+          const metrics = await response.json(); // Response is a Metrics object
+          const alerts = metrics.alerts_generated;
           console.log(`${mode} processing successful, alerts:`, alerts);
+          
+          const timeTaken = metrics.execution_time_ms;
+          updateMetrics(mode, logData.length, timeTaken, alerts.length, 100, metrics.logs_per_second);
+
+          // Dispatch alerts to other components
+          const alertsEvent = new CustomEvent('alertsDetected', { detail: { alerts: alerts } });
+          document.dispatchEvent(alertsEvent);
+          
+          // Also update the total active alerts in header
+          dispatchTotalAlerts(alerts.length);
+
+          // Store metrics for AI explanation
+          lastRunMetrics = {
+              total_logs_processed: logData.length,
+              execution_time_ms: timeTaken,
+              logs_per_second: metrics.logs_per_second,
+              alerts_generated: alerts,
+              mode: mode
+          };
         } else {
           const errorText = await response.text();
           console.error(`${mode} processing failed:`, response.status, errorText);
@@ -323,68 +383,16 @@
       } finally {
         button.innerHTML = originalText;
         button.disabled = false;
-        const timeTaken = performance.now() - startTime;
-        updateMetrics(mode, logData.length, timeTaken, alertsDetectedThisRun, 100);
-      }
-    };
-
-    // Update metrics after processing
-    const updateMetrics = (mode, currentLogsProcessed, timeTaken, currentAlerts, progress) => {
-      const rowMap = {
-        'Sequential': document.getElementById('sequential-row'),
-        'Parallel': document.getElementById('parallel-row'),
-        'Distributed': document.getElementById('distributed-row')
-      };
-      const progressMap = {
-        'Sequential': document.getElementById('sequential-progress'),
-        'Parallel': document.getElementById('parallel-progress'),
-        'Distributed': document.getElementById('distributed-progress')
-      };
-
-      const row = rowMap[mode];
-      const progressBar = progressMap[mode];
-
-      if (!row) return;
-
-      const logsProcessedElement = row.querySelector('[data-metric="logsProcessed"]');
-      const timeTakenElement = row.querySelector('[data-metric="timeTaken"]');
-      const logsPerSecElement = row.querySelector('[data-metric="logsPerSec"]');
-      const alertCountElement = row.querySelector('.alert-count');
-      const alertTextElement = row.querySelector('.alert-text');
-
-      // Animate number updates
-      const prevLogsProcessed = parseInt(logsProcessedElement.textContent.replace(/,/g, '')) || 0;
-      animateNumberChange(logsProcessedElement, prevLogsProcessed, currentLogsProcessed);
-
-      const prevTimeTaken = parseFloat(timeTakenElement.textContent) || 0;
-      timeTakenElement.innerHTML = `${Math.round(timeTaken)}<span class="unit">ms</span>`; // No animation for time for now
-
-      const currentLogsPerSec = Math.round(currentLogsProcessed / (timeTaken / 1000)) || 0;
-      const prevLogsPerSec = parseFloat(logsPerSecElement.textContent) || 0;
-      logsPerSecElement.innerHTML = `${currentLogsPerSec}<span class="unit">/sec</span>`; // No animation for logs/sec for now
-
-      const prevAlerts = parseInt(alertCountElement.textContent) || 0;
-      animateNumberChange(alertCountElement, prevAlerts, currentAlerts);
-      
-      alertTextElement.textContent = currentAlerts > 0 ? 'Alerts detected' : 'No alerts';
-
-      // Update total active alerts and dispatch event
-      const allAlertCounts = [
-        parseInt(document.getElementById('sequential-row').querySelector('.alert-count').textContent) || 0,
-        parseInt(document.getElementById('parallel-row').querySelector('.alert-count').textContent) || 0,
-        parseInt(document.getElementById('distributed-row').querySelector('.alert-count').textContent) || 0,
-      ];
-      totalActiveAlerts = allAlertCounts.reduce((sum, count) => sum + count, 0);
-      dispatchTotalAlerts(totalActiveAlerts);
-
-      // Update progress bar
-      if (progressBar) {
-        progressBar.style.width = `${progress}%`;
       }
     };
 
     // AI Explanation
     const showAIExplanation = async () => {
+      if (!lastRunMetrics) {
+        alert("Please run an analysis first to generate metrics for explanation.");
+        return;
+      }
+
       aiExplanationBtn.innerHTML = `
         <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
@@ -394,17 +402,13 @@
       aiExplanationBtn.disabled = true;
 
       try {
-        const logEntriesForBackend = logData.map(line => ({
-          timestamp: new Date().toISOString(),
-          details: line
-        }));
-
-        const response = await fetch('/api/analyze/explain', {
+        // Send a list of metrics as expected by backend/python script
+        const response = await fetch('/api/ai/explain', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(logEntriesForBackend),
+          body: JSON.stringify([lastRunMetrics]),
         });
 
         if (response.ok) {
@@ -431,6 +435,45 @@
       }
     };
 
+    // Update metrics function
+    const updateMetrics = (mode, count, time, alerts, progress, logsPerSecFromBackend = null) => {
+      const rowMap = {
+        'Sequential': document.getElementById('sequential-row'),
+        'Parallel': document.getElementById('parallel-row'),
+        'Distributed': document.getElementById('distributed-row')
+      };
+      const progressMap = {
+        'Sequential': document.getElementById('sequential-progress'),
+        'Parallel': document.getElementById('parallel-progress'),
+        'Distributed': document.getElementById('distributed-progress')
+      };
+
+      const row = rowMap[mode];
+      const progressBar = progressMap[mode];
+
+      if (row) {
+        // animateNumberChange(row.querySelector('[data-metric="logsProcessed"]'), 0, count);
+        row.querySelector('[data-metric="logsProcessed"]').textContent = count.toLocaleString();
+        row.querySelector('[data-metric="timeTaken"]').innerHTML = `${Number(time).toFixed(2)}<span class="unit">ms</span>`;
+        
+        let logsPerSec = logsPerSecFromBackend;
+        if (logsPerSec === null) {
+            if (time > 0) {
+                logsPerSec = (count / time) * 1000;
+            } else {
+                logsPerSec = 0;
+            }
+        }
+        row.querySelector('[data-metric="logsPerSec"]').innerHTML = `${Math.floor(logsPerSec).toLocaleString()}<span class="unit">/sec</span>`;
+        
+        row.querySelector('.alert-count').textContent = alerts;
+        row.querySelector('.alert-text').textContent = alerts === 0 ? 'No alerts' : `${alerts} alerts detected`;
+      }
+      if (progressBar) {
+        progressBar.style.width = `${progress}%`;
+      }
+    };
+
     // Event listeners
     if (runSequentialBtn) runSequentialBtn.addEventListener('click', () => simulateProcessing('Sequential'));
     if (runParallelBtn) runParallelBtn.addEventListener('click', () => simulateProcessing('Parallel'));
@@ -439,6 +482,12 @@
 
     // Initial fetch of log data
     fetchLogData();
+    // Make alert cells clickable to navigate to Alerts tab
+    document.querySelectorAll('.mode-row .alert-cell').forEach(cell => {
+      cell.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('navigateToAlerts'));
+      });
+    });
   });
 </script>
 
@@ -558,6 +607,15 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 8px !important;
+    border-radius: 6px;
+  }
+
+  .alert-cell:hover {
+    background-color: rgba(255, 68, 68, 0.1);
+    transform: translateX(5px);
   }
 
   .alert-count {
@@ -639,6 +697,25 @@
     transition: width 0.3s ease-out;
   }
 
+  .file-info-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .file-size {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-left: 5px;
+  }
+
   .mode-row td {
     padding-bottom: 5px;
   }
@@ -646,5 +723,26 @@
   .progress-row td {
     padding-top: 0;
     padding-bottom: 20px;
+  }
+
+  .subsection-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+  }
+
+  .log-content-display {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    line-height: 1.5;
   }
 </style>

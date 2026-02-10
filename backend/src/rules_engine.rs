@@ -26,8 +26,31 @@ impl RulesEngine {
         }
     }
 
-    pub fn add_rule(&mut self, rule: Rule) {
+    pub fn add_rule(&mut self, mut rule: Rule) {
+        // Automatically generate sequential ID if needed
+        let next_index = self.rules.len() + 1;
+        rule.id = format!("rule_{:03}", next_index);
+        
         self.rules.push(rule);
+        
+        // Persist to file
+        if let Err(e) = self.save_rules() {
+            eprintln!("Warning: Failed to persist rules: {}", e);
+        }
+    }
+
+    pub fn save_rules(&self) -> Result<(), String> {
+        let json = serde_json::to_string_pretty(&self.rules)
+            .map_err(|e| format!("Serialization error: {}", e))?;
+        
+        let mut file = std::fs::File::create("rules.json")
+            .map_err(|e| format!("File creation error: {}", e))?;
+        
+        use std::io::Write;
+        file.write_all(json.as_bytes())
+            .map_err(|e| format!("File write error: {}", e))?;
+        
+        Ok(())
     }
 
     pub fn evaluate_log_entry(&self, log_entry: &LogEntry) -> Vec<Alert> {

@@ -64,7 +64,7 @@ pub async fn run_worker(worker_id: usize) -> Result<(), Box<dyn Error>> {
                 println!("Worker {} received shutdown command. Sending results and exiting.", worker_id);
                 let metrics = Metrics {
                     total_logs_processed: processed_logs_count,
-                    execution_time_ms: 0, // Worker doesn't track overall time
+                    execution_time_ms: 0.0, // Worker doesn't track overall time
                     logs_per_second: 0.0, // Worker doesn't track overall rate
                     alerts_generated: generated_alerts,
                     mode: "Distributed Worker".to_string(),

@@ -43,67 +43,36 @@ def generate_explanation(metrics: list[dict]) -> str:
     return "\n".join(explanation_parts)
 
 if __name__ == '__main__':
-    # Example Usage:
-    sample_metrics = [
-        {
-            "total_logs_processed": 150000,
-            "execution_time_ms": 1200.50,
-            "logs_per_second": 124950.00,
-            "alerts_generated": [
-                {
-                    "id": "alert-1",
-                    "timestamp": "2024-01-01T10:00:00Z",
-                    "alert_type": "BruteForce",
-                    "description": "Multiple failed login attempts from 192.168.1.10",
-                    "log_entry_sample": {"ip_address": "192.168.1.10", "user": "admin"}
-                },
-                {
-                    "id": "alert-2",
-                    "timestamp": "2024-01-01T10:01:00Z",
-                    "alert_type": "HighFrequencyRequest",
-                    "description": "Unusual number of requests to /api/v1/sensitive_data from 10.0.0.5",
-                    "log_entry_sample": {"ip_address": "10.0.0.5", "path": "/api/v1/sensitive_data"}
+    import sys
+    
+    # Check if input is provided via stdin
+    if not sys.stdin.isatty():
+        try:
+            input_data = sys.stdin.read()
+            if input_data:
+                metrics = json.loads(input_data)
+                # Ensure metrics is a list, if single dict provided, wrap it
+                if isinstance(metrics, dict):
+                    metrics = [metrics]
+                
+                explanation = generate_explanation(metrics)
+                
+                # Output as JSON object with explanation field to match Rust expectation
+                # The Rust side expects a JSON that can be deserialized into AiExplanation
+                # or just the raw string?
+                # Rust `AiExplanation` struct: { explanation: String, suggested_rules: Vec<Rule> }
+                # The python script currently returns a string string.
+                # I should wrap it in the expected JSON structure.
+                
+                response = {
+                    "explanation": explanation,
+                    "suggested_rules": [] 
                 }
-            ],
-            "mode": "parallel"
-        },
-        {
-            "total_logs_processed": 500000,
-            "execution_time_ms": 3500.75,
-            "logs_per_second": 142847.00,
-            "alerts_generated": [
-                {
-                    "id": "alert-3",
-                    "timestamp": "2024-01-01T11:00:00Z",
-                    "alert_type": "SuspiciousIp",
-                    "description": "Connection from known malicious IP 172.16.0.1",
-                    "log_entry_sample": {"ip_address": "172.16.0.1"}
-                },
-                {
-                    "id": "alert-4",
-                    "timestamp": "2024-01-01T11:05:00Z",
-                    "alert_type": "BruteForce",
-                    "description": "15 failed login attempts from 192.168.1.11",
-                    "log_entry_sample": {"ip_address": "192.168.1.11", "user": "guest"}
-                },
-                {
-                    "id": "alert-5",
-                    "timestamp": "2024-01-01T11:10:00Z",
-                    "alert_type": "HighFrequencyRequest",
-                    "description": "2000 requests in 1 minute to /login from 10.0.0.6",
-                    "log_entry_sample": {"ip_address": "10.0.0.6", "path": "/login"}
-                },
-                {
-                    "id": "alert-6",
-                    "timestamp": "2024-01-01T11:15:00Z",
-                    "alert_type": "Custom",
-                    "description": "Unusual data exfiltration pattern detected",
-                    "log_entry_sample": {"source": "internal", "destination": "external"}
-                }
-            ],
-            "mode": "distributed"
-        }
-    ]
-
-    explanation = generate_explanation(sample_metrics)
-    print(explanation)
+                print(json.dumps(response))
+            else:
+                 print(json.dumps({"explanation": "No input data provided.", "suggested_rules": []}))
+        except Exception as e:
+            print(json.dumps({"explanation": f"Error processing input: {str(e)}", "suggested_rules": []}))
+    else:
+        # Keep example usage for manual testing if needed, or just print usage
+        print(json.dumps({"explanation": "Please provide metrics JSON via stdin.", "suggested_rules": []}))

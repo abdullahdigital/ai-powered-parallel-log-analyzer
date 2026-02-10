@@ -37,7 +37,7 @@ pub struct Alert {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Metrics {
     pub total_logs_processed: usize,
-    pub execution_time_ms: u128,
+    pub execution_time_ms: f64,
     pub logs_per_second: f64,
     pub alerts_generated: Vec<Alert>,
     pub mode: String, // Sequential, Parallel, Distributed
@@ -85,4 +85,10 @@ pub enum MasterMessage {
     AnalysisResult(Metrics),
     Error(String),
     Ack,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AiExplanation {
+    pub explanation: String,
+    pub suggested_rules: Vec<Rule>,
 }

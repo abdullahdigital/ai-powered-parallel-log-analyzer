@@ -15,7 +15,7 @@ pub fn run_sequential_analysis(parsed_logs: Vec<LogEntry>, rules: Vec<Rule>) -> 
 
     Metrics {
         total_logs_processed: processed_logs_count,
-        execution_time_ms: 0,
+        execution_time_ms: 0.0,
         logs_per_second: 0.0,
         alerts_generated: alerts,
         mode: "Sequential".to_string(),

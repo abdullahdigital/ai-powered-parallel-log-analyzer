@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use crate::models::{LogEntry, Rule, ParsingRule};
 use crate::rules_engine::RulesEngine;
 use crate::log_processor::{process_sequential, process_parallel, process_distributed, parse_log_content};
-use crate::ai_module::{explain_log_entry, generate_rule_from_description};
+// ai_module functions are used via crate::ai_module::prefix
 
 pub struct AppState {
     pub rules_engine: Arc<Mutex<RulesEngine>>,
@@ -71,17 +71,29 @@ pub async fn analyze_distributed_endpoint(log_entries: web::Json<Vec<LogEntry>>,
     HttpResponse::Ok().json(alerts)
 }
 
-#[post("/api/ai/explain")]
-pub async fn explain_log_endpoint(log_entry: web::Json<LogEntry>) -> impl Responder {
-    let explanation = explain_log_entry(&log_entry.into_inner());
-    HttpResponse::Ok().json(explanation)
+// ... imports
+
+#[post("/api/ai/explain-alert")]
+pub async fn explain_alert_endpoint(alert: web::Json<serde_json::Value>) -> impl Responder {
+    match crate::ai_module::explain_alert(alert.into_inner()) {
+        Some(explanation) => HttpResponse::Ok().json(explanation),
+        None => HttpResponse::InternalServerError().body("Failed to generate AI explanation"),
+    }
 }
 
 #[post("/api/ai/generate-rule")]
-pub async fn generate_rule_endpoint(description: web::Json<String>) -> impl Responder {
-    match generate_rule_from_description(&description.into_inner()) {
-        Some(rule) => HttpResponse::Ok().json(rule),
-        None => HttpResponse::InternalServerError().body("Failed to generate rule"),
+pub async fn generate_rule_endpoint(req: web::Json<serde_json::Value>) -> impl Responder {
+    let description = if let Some(desc) = req.get("description").and_then(|v| v.as_str()) {
+        desc.to_string()
+    } else if let Some(desc_str) = req.as_str() {
+        desc_str.to_string()
+    } else {
+        return HttpResponse::BadRequest().body("Invalid input. Expected JSON with 'description' field or a raw string.");
+    };
+
+    match crate::ai_module::generate_rule_from_description(&description) {
+        Ok(rule) => HttpResponse::Ok().json(rule),
+        Err(e) => HttpResponse::InternalServerError().body(format!("AI Error: {}", e)),
     }
 }
 
@@ -98,15 +110,19 @@ pub async fn run_server(rules_engine: Arc<Mutex<RulesEngine>>, parsing_rules: Ve
 
     let parsing_rules_arc = Arc::new(Mutex::new(parsing_rules));
 
+    // Initialize logger
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     HttpServer::new(move || {
         let cors = Cors::default()
-            .allowed_origin("http://localhost:4321")
+            .allow_any_origin() // Temporarily allow any origin for debugging
             .allowed_methods(vec!["GET", "POST"])
             .allowed_headers(vec![actix_web::http::header::AUTHORIZATION, actix_web::http::header::ACCEPT])
             .allowed_header(actix_web::http::header::CONTENT_TYPE)
             .max_age(3600);
 
         App::new()
+            .wrap(actix_web::middleware::Logger::default()) // Enable request logging
             .wrap(cors)
             .app_data(web::Data::new(AppState { 
                 rules_engine: Arc::clone(&rules_engine),
@@ -118,7 +134,7 @@ pub async fn run_server(rules_engine: Arc<Mutex<RulesEngine>>, parsing_rules: Ve
             .service(analyze_sequential_endpoint)
             .service(analyze_parallel_endpoint)
             .service(analyze_distributed_endpoint)
-            .service(explain_log_endpoint)
+            .service(explain_alert_endpoint)
             .service(generate_rule_endpoint)
             .service(upload_log_endpoint)
     })

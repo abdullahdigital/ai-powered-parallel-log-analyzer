@@ -11,7 +11,6 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
     let listener = TcpListener::bind(format!("127.0.0.1:{}", WORKER_PORT)).await?;
     println!("Master listening on port {}", WORKER_PORT);
 
-    let mut worker_handles: Vec<tokio::task::JoinHandle<Result<tokio::net::TcpStream, Box<dyn std::error::Error + Send + Sync>>>> = Vec::new();
     let mut worker_streams = Vec::new();
 
     for i in 0..num_workers {
@@ -46,6 +45,10 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
                 ip_address: None,
                 user_id: None,
                 raw_log: line.to_string(),
+                event_type: None,
+                level: None,
+                message: None,
+                extra: std::collections::HashMap::new(),
             }).collect();
             let log_chunk_message = WorkerMessage::LogChunk(log_entries_chunk);
             let serialized_chunk = serde_json::to_vec(&log_chunk_message)?;
@@ -111,17 +114,18 @@ pub async fn run_master(log_lines: Vec<String>, rules: Vec<Rule>, num_workers: u
     }
 
     let elapsed_time = start_time.elapsed();
-    let execution_time_ms = elapsed_time.as_millis();
-    let logs_per_second = if execution_time_ms > 0 {
-        (total_processed_logs as f64 / execution_time_ms as f64) * 1000.0
+    let execution_time_ms = elapsed_time.as_secs_f64() * 1000.0;
+    let logs_per_second = if execution_time_ms > 0.0 {
+        (total_processed_logs as f64 / execution_time_ms) * 1000.0
     } else {
         0.0
     };
-
+ 
     Ok(Metrics {
         total_logs_processed: total_processed_logs,
         execution_time_ms,
         logs_per_second,
         alerts_generated: all_alerts,
         mode: "Distributed".to_string(),
-    })}
+    })
+}

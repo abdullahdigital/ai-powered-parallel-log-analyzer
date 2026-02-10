@@ -3,117 +3,97 @@
 
 <section class="rule-management-section">
   <div class="section-header">
-    <div class="section-title">DETECTION RULES</div>
+    <div class="section-title">DETECTION RULES (LIVE)</div>
     <div class="header-controls">
-      <button class="action-btn secondary" id="load-rules-btn">
-        <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        Load Rules
-      </button>
-      <button class="action-btn primary" id="save-rules-btn">
-        <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-          <polyline points="17 21 17 13 7 13 7 21"></polyline>
-          <polyline points="7 3 7 8 15 8"></polyline>
-        </svg>
-        Save Rules
-      </button>
+      <div class="status-indicator">
+        <span class="live-dot"></span>
+        <span class="status-text">SYNCED WITH ENGINE</span>
+      </div>
     </div>
   </div>
 
-  <div class="rule-editor">
-    <div id="rule-editor-content" contenteditable="true" spellcheck="false" class="syntax-highlighted-editor" placeholder="Edit your detection rules here (JSON format)"></div>
-  </div>
-
-  <script is:inline>
-    const editor = document.getElementById('rule-editor-content');
-
-    const highlightJson = (jsonString) => {
-      if (!jsonString) return '';
-
-      // Basic JSON syntax highlighting regex
-      jsonString = jsonString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      
-      // Keys
-      jsonString = jsonString.replace(/"(\w+)"\s*:/g, '<span class="json-key">"$1"</span>:');
-      // Strings
-      jsonString = jsonString.replace(/"([^"]*)"/g, '<span class="json-string">"$1"</span>');
-      // Numbers
-      jsonString = jsonString.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="json-number">$1</span>');
-      // Booleans and null
-      jsonString = jsonString.replace(/\b(true|false|null)\b/g, '<span class="json-boolean">$1</span>');
-
-      return jsonString;
-    };
-
-    const applyHighlighting = () => {
-      const text = editor.textContent;
-      editor.innerHTML = highlightJson(text);
-      // Restore cursor position (this is a simplified approach and might not be perfect)
-      const range = document.createRange();
-      const sel = window.getSelection();
-      range.selectNodeContents(editor);
-      range.collapse(false); // Collapse to the end
-      sel.removeAllRanges();
-      sel.addRange(range);
-    };
-
-    editor.addEventListener('input', applyHighlighting);
-
-    // Initial highlighting if there's any content
-    applyHighlighting();
-  </script>
-
   <div class="rule-list">
-    <h3>Active Rules</h3>
     <table class="metrics-table">
       <thead>
         <tr>
           <th>ID</th>
           <th>NAME</th>
+          <th>DESCRIPTION</th>
+          <th>PATTERN / LOGIC</th>
           <th>TYPE</th>
           <th>STATUS</th>
-          <th>ACTIONS</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="rules-table-body">
         <tr>
-          <td>1</td>
-          <td>Brute Force Login</td>
-          <td>IP-based</td>
-          <td><span class="status-active">Active</span></td>
-          <td>
-            <button class="action-btn small secondary">Edit</button>
-            <button class="action-btn small secondary">Disable</button>
-          </td>
-        </tr>
-        <tr>
-          <td>2</td>
-          <td>High Freq Request</td>
-          <td>Threshold</td>
-          <td><span class="status-active">Active</span></td>
-          <td>
-            <button class="action-btn small secondary">Edit</button>
-            <button class="action-btn small secondary">Disable</button>
-          </td>
-        </tr>
-        <tr>
-          <td>3</td>
-          <td>Suspicious IP</td>
-          <td>Behavioral</td>
-          <td><span class="status-inactive">Inactive</span></td>
-          <td>
-            <button class="action-btn small secondary">Edit</button>
-            <button class="action-btn small secondary">Enable</button>
-          </td>
+          <td colspan="6" class="loading-cell">Connecting to rules engine...</td>
         </tr>
       </tbody>
     </table>
   </div>
 </section>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tableBody = document.getElementById('rules-table-body');
+
+    const fetchRules = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8080/api/rules');
+        if (!response.ok) throw new Error('Failed to fetch rules');
+        
+        const rules = await response.json();
+        renderRules(rules);
+      } catch (error) {
+        console.error('Error fetching rules:', error);
+        tableBody.innerHTML = `<tr><td colspan="6" class="error-cell">Error connecting to backend: ${error.message}</td></tr>`;
+      }
+    };
+
+    const renderRules = (rules) => {
+      if (!rules || rules.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6">No rules found in engine.</td></tr>';
+        return;
+      }
+
+      tableBody.innerHTML = rules.map(rule => {
+        const statusClass = rule.enabled ? 'status-active' : 'status-inactive';
+        const statusLabel = rule.enabled ? 'Enabled' : 'Disabled';
+        
+        let typeLabel = '';
+        if (typeof rule.rule_type === 'string') {
+          typeLabel = rule.rule_type;
+        } else if (rule.rule_type.Custom) {
+          typeLabel = rule.rule_type.Custom;
+        } else {
+          typeLabel = Object.keys(rule.rule_type)[0];
+        }
+
+        return `
+          <tr class="rule-row">
+            <td class="id-cell">${rule.id}</td>
+            <td class="name-cell">
+              <strong>${rule.name}</strong>
+            </td>
+            <td class="desc-cell">${rule.description}</td>
+            <td class="pattern-cell">
+              <code>${rule.pattern}</code>
+            </td>
+            <td class="type-cell">
+              <span class="type-badge">${typeLabel}</span>
+            </td>
+            <td>
+              <span class="${statusClass}">${statusLabel}</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    // Initial fetch
+    fetchRules();
+  });
+</script>
 
 <style>
   /* Styles for DetectionRules component */
@@ -137,131 +117,163 @@
     font-weight: 600;
   }
 
-  .header-controls {
-    display: flex;
-    gap: 15px;
-  }
-
-  .action-btn {
-    padding: 10px 15px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--card-bg);
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
+  .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.3s ease;
+    background-color: rgba(0, 255, 128, 0.05);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(0, 255, 128, 0.1);
   }
 
-  .action-btn.primary {
-    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-    border: none;
-    color: white;
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent-green);
+    animation: blink 2s infinite;
   }
 
-  .action-btn.secondary {
-    background-color: rgba(255, 255, 255, 0.05);
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
   }
 
-  .action-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-  }
-
-  .action-btn-icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  .rule-editor .syntax-highlighted-editor {
-    width: 100%;
-    min-height: 150px; /* Reduced height as per user request */
-    background-color: var(--secondary-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 15px;
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
-    color: var(--text-primary);
-    resize: vertical;
-    margin-bottom: 20px;
-    white-space: pre-wrap; /* Preserve whitespace and wrap text */
-    word-wrap: break-word; /* Break long words */
-    outline: none; /* Remove outline on focus */
-  }
-
-  /* Placeholder styling for contenteditable div */
-  .rule-editor .syntax-highlighted-editor:empty:before {
-    content: attr(placeholder);
-    color: var(--text-secondary);
-    pointer-events: none;
-  }
-
-  /* Syntax highlighting styles */
-  .json-key {
-    color: var(--accent-blue); /* Example color for keys */
-  }
-
-  .json-string {
-    color: var(--accent-green); /* Example color for strings */
-  }
-
-  .json-number {
-    color: var(--accent-purple); /* Example color for numbers */
-  }
-
-  .json-boolean {
-    color: var(--accent-orange); /* Example color for booleans (true/false/null) */
-  }
-
-  .rule-list h3 {
-    font-size: 16px;
+  .status-text {
+    font-size: 11px;
     font-weight: 600;
-    margin-bottom: 15px;
+    color: var(--accent-green);
+    letter-spacing: 0.5px;
+  }
+
+  .rule-list {
+    margin-top: 10px;
   }
 
   .metrics-table {
     width: 100%;
-    border-collapse: collapse;
-  }
-
-  .metrics-table th,
-  .metrics-table td {
-    text-align: left;
-    padding: 12px 15px;
-    border-bottom: 1px solid var(--border-color);
+    border-collapse: separate;
+    border-spacing: 0 8px;
+    table-layout: fixed; /* Added to control column widths */
   }
 
   .metrics-table th {
-    background-color: rgba(255, 255, 255, 0.03);
-    font-weight: 600;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-align: left;
+    padding: 12px 20px;
     color: var(--text-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: none;
   }
 
-  .metrics-table tr:last-child td {
-    border-bottom: none;
+  /* Specific column widths to prevent overflow */
+  th:nth-child(1), td:nth-child(1) { width: 80px; }
+  th:nth-child(2), td:nth-child(2) { width: 180px; }
+  th:nth-child(3), td:nth-child(3) { width: 25%; }
+  th:nth-child(4), td:nth-child(4) { width: 35%; }
+  th:nth-child(5), td:nth-child(5) { width: 120px; }
+  th:nth-child(6), td:nth-child(6) { width: 100px; }
+
+  .rule-row td {
+    background-color: rgba(255, 255, 255, 0.02);
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rule-row td:first-child {
+    border-left: 1px solid var(--border-color);
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+  }
+
+  .rule-row td:last-child {
+    border-right: 1px solid var(--border-color);
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  .id-cell {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .name-cell strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    display: block;
+    line-height: 1.4;
+  }
+
+  .desc-cell {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .pattern-cell code {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent-blue);
+    font-size: 12px;
+    border: 1px solid rgba(0, 123, 255, 0.2);
+    display: inline-block;
+    max-width: 100%;
+    word-break: break-all; /* Ensure long regex wraps */
+    white-space: pre-wrap;
+  }
+
+  .type-badge {
+    background-color: rgba(138, 43, 226, 0.1);
+    color: var(--accent-purple);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
   }
 
   .status-active {
     color: var(--accent-green);
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-active::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background-color: var(--accent-green);
+    border-radius: 50%;
   }
 
   .status-inactive {
     color: var(--text-secondary);
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
   }
 
-  .action-btn.small {
-    padding: 6px 10px;
-    font-size: 12px;
-    gap: 5px;
+  .loading-cell, .error-cell {
+    text-align: center;
+    padding: 40px !important;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .error-cell {
+    color: var(--accent-red);
   }
 </style>

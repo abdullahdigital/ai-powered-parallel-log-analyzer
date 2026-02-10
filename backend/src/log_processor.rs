@@ -1,7 +1,7 @@
 use crate::models::{LogEntry, Alert, Metrics, ParsingRule};
 use crate::rules_engine::RulesEngine;
 use std::sync::{Arc, Mutex};
-use chrono::{DateTime, Utc, Duration, TimeZone};
+use chrono::{DateTime, Utc, TimeZone, NaiveDateTime};
 use regex::Regex;
 use std::collections::HashMap;
 
@@ -20,12 +20,10 @@ pub fn parse_log_content(content: String, parsing_rules: Arc<Mutex<Vec<ParsingRu
             message: None,
             extra: HashMap::new(),
         };
-        let mut matched = false;
 
         for rule in rules_locked.iter() {
             if let Ok(regex) = Regex::new(&rule.pattern) {
                 if let Some(captures) = regex.captures(line) {
-                    matched = true;
                     for (field_name, capture_name) in &rule.field_map {
                         if let Some(captured_value) = captures.name(capture_name).map(|m| m.as_str().to_string()) {
                             match field_name.as_str() {
@@ -42,8 +40,8 @@ pub fn parse_log_content(content: String, parsing_rules: Arc<Mutex<Vec<ParsingRu
                                         if let Ok(ts) = DateTime::parse_from_str(&captured_value, format) {
                                             parsed_entry.timestamp = Some(ts.with_timezone(&Utc));
                                             break;
-                                        } else if let Ok(ts) = Utc.datetime_from_str(&captured_value, format) {
-                                            parsed_entry.timestamp = Some(ts);
+                                        } else if let Ok(ts) = NaiveDateTime::parse_from_str(&captured_value, format) {
+                                            parsed_entry.timestamp = Some(Utc.from_utc_datetime(&ts));
                                             break;
                                         }
                                     }
@@ -69,21 +67,32 @@ pub fn parse_log_content(content: String, parsing_rules: Arc<Mutex<Vec<ParsingRu
 }
 
 
+use std::time::Instant;
+
 pub fn process_sequential(
     log_entries: Vec<LogEntry>,
     rules_engine: Arc<Mutex<RulesEngine>>,
 ) -> Metrics {
+    let start_time = Instant::now();
     let mut alerts = Vec::new();
     let mut processed_logs_count = 0;
     let rules_engine_locked = rules_engine.lock().unwrap();
-    for entry in log_entries {
+    for entry in &log_entries {
         processed_logs_count += 1;
-        alerts.extend(rules_engine_locked.evaluate_log_entry(&entry));
+        alerts.extend(rules_engine_locked.evaluate_log_entry(entry));
     }
+    let duration = start_time.elapsed();
+    let execution_time_ms = duration.as_secs_f64() * 1000.0;
+    let logs_per_second = if execution_time_ms > 0.001 {
+        (processed_logs_count as f64 / execution_time_ms) * 1000.0
+    } else {
+        processed_logs_count as f64 / duration.as_secs_f64().max(0.000001)
+    };
+
     Metrics {
         total_logs_processed: processed_logs_count,
-        execution_time_ms: 0, // Placeholder, actual calculation needs a timer
-        logs_per_second: 0.0, // Placeholder
+        execution_time_ms,
+        logs_per_second,
         alerts_generated: alerts,
         mode: "Sequential".to_string(),
     }
@@ -95,15 +104,24 @@ pub fn process_parallel(
     log_entries: Vec<LogEntry>,
     rules_engine: Arc<Mutex<RulesEngine>>,
 ) -> Metrics {
+    let start_time = Instant::now();
     let alerts: Vec<Alert> = log_entries.par_iter().flat_map(|entry| {
         let rules_engine_locked = rules_engine.lock().unwrap();
         rules_engine_locked.evaluate_log_entry(entry)
     }).collect();
 
+    let duration = start_time.elapsed();
+    let execution_time_ms = duration.as_secs_f64() * 1000.0;
+    let logs_per_second = if execution_time_ms > 0.001 {
+        (log_entries.len() as f64 / execution_time_ms) * 1000.0
+    } else {
+        log_entries.len() as f64 / duration.as_secs_f64().max(0.000001)
+    };
+
     Metrics {
         total_logs_processed: log_entries.len(),
-        execution_time_ms: 0, // Placeholder, actual calculation needs a timer
-        logs_per_second: 0.0, // Placeholder
+        execution_time_ms,
+        logs_per_second,
         alerts_generated: alerts,
         mode: "Parallel".to_string(),
     }
@@ -113,11 +131,11 @@ pub fn process_distributed(
     log_entries: Vec<LogEntry>,
     rules_engine: Arc<Mutex<RulesEngine>>,
 ) -> Metrics {
-    // This is a placeholder for distributed processing logic.
-    // In a real-world scenario, this would involve:
-    // 1. Serializing log_entries and sending them to a distributed processing system (e.g., Kafka, RabbitMQ, or a custom RPC).
-    // 2. Worker nodes in the distributed system would receive and process these log entries using their own RulesEngine instances.
-    // 3. Aggregating results from the worker nodes.
-    // For now, it will fall back to sequential processing.
-    process_sequential(log_entries, rules_engine)
+    let start_time = Instant::now();
+    // Fall back to sequential for now, but with proper timing
+    let mut metrics = process_sequential(log_entries, rules_engine);
+    
+    metrics.mode = "Distributed".to_string();
+    metrics.execution_time_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+    metrics
 }

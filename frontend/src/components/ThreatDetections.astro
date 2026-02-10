@@ -38,44 +38,6 @@ import './ThreatDetections.css';
 </section>
 
 <script>
-  // Function to generate a random log entry for demonstration
-  const generateRandomLog = () => {
-    const severities = ['CRITICAL', 'WARNING', 'INFO', 'SECURITY'];
-    const messages = [
-      'Multiple failed login attempts',
-      'Unusual file access pattern',
-      'Database injection attempt',
-      'Configuration change detected',
-      'Port scanning detected',
-      'High memory usage alert',
-      'Unauthorized access attempt',
-      'SQL Injection attempt detected'
-    ];
-    const rawLogs = [
-      '[2024-01-15 12:45:24] host=webserver.com user=admin status=failed attempts=5 source=192.168.1.1 CRITICAL: Multiple failed login attempts',
-      '[2024-01-15 12:44:58] host=fileserver.net user=guest path=/var/www/html/data/ access_type=read WARNING: Unusual file access pattern',
-      '[2024-01-15 12:44:32] host=db.internal query="SELECT * FROM users WHERE id=\'1 OR 1=1--\'" CRITICAL: Database injection attempt',
-      '[2024-01-15 12:43:45] host=appserver.io user=system config=updated INFO: Configuration change detected',
-      '[2024-01-15 12:43:12] host=firewall.local target=10.0.0.0/8 type=SYN_SCAN CRITICAL: Port scanning detected',
-      '[2024-01-15 12:42:38] host=monitor.cloud service=backend memory_usage=95% WARNING: High memory usage alert',
-      '[2024-01-15 12:41:01] host=proxy.edge user=unknown ip=10.0.0.5 action=blocked SECURITY: Unauthorized access attempt',
-      '[2024-01-15 12:40:10] host=api.gateway payload="DROP TABLE users;" SECURITY: SQL Injection attempt detected'
-    ];
-
-    const severity = severities[Math.floor(Math.random() * severities.length)];
-    const message = messages[Math.floor(Math.random() * messages.length)];
-    const rawLog = rawLogs[Math.floor(Math.random() * rawLogs.length)];
-    const timestamp = new Date().toLocaleTimeString();
-
-    return {
-      id: Date.now(),
-      time: timestamp,
-      severity: severity,
-      message: message,
-      raw: rawLog
-    };
-  };
-
   // Function to render alerts into the table
   const renderAlerts = (alerts) => {
     const alertsTableBody = document.getElementById('alerts-table-body');
@@ -83,16 +45,26 @@ import './ThreatDetections.css';
     
     if (!alertsTableBody || !totalAlertsCount) return;
     
+    if (!alerts || alerts.length === 0) {
+      alertsTableBody.innerHTML = '<tr><td colspan="5" class="no-alerts-msg">No alerts detected in last run.</td></tr>';
+      totalAlertsCount.textContent = '0';
+      return;
+    }
+
     alertsTableBody.innerHTML = '';
     alerts.forEach(alert => {
+      const time = new Date(alert.timestamp).toLocaleTimeString();
+      const severity = typeof alert.alert_type === 'string' ? alert.alert_type : Object.keys(alert.alert_type)[0];
+      const severityClass = severity.toLowerCase();
+
       const row = document.createElement('tr');
       row.classList.add('alert-row');
       row.innerHTML = `
         <td class="expand-toggle"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></td>
-        <td>${alert.time}</td>
-        <td><span class="severity-badge ${alert.severity.toLowerCase()}">${alert.severity}</span></td>
-        <td>${alert.message}</td>
-        <td><button class="view-raw-btn" data-raw-log="${alert.raw.replace(/"/g, '&quot;')}">View Raw</button></td>
+        <td>${time}</td>
+        <td><span class="severity-badge ${severityClass}">${severity}</span></td>
+        <td>${alert.description}</td>
+        <td><button class="view-raw-btn" data-raw-log="${(alert.log_entry_sample?.raw_log || 'N/A').replace(/"/g, '&quot;')}">View Raw</button></td>
       `;
       alertsTableBody.appendChild(row);
 
@@ -101,15 +73,36 @@ import './ThreatDetections.css';
       expandableRow.innerHTML = `
         <td colspan="5">
           <div class="expanded-details">
-            <strong>Rule Matched:</strong> Suspicious Activity Detection v1.2<br>
-            <strong>Source IP:</strong> 192.168.1.1<br>
-            <strong>User Agent:</strong> Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
+            <div class="details-grid">
+              <div class="details-column">
+                <p><strong>ID:</strong> ${alert.id}</p>
+                <p><strong>IP Address:</strong> ${alert.log_entry_sample?.ip_address || 'Unknown'}</p>
+              </div>
+              <div class="details-column">
+                <p><strong>User ID:</strong> ${alert.log_entry_sample?.user_id || 'System'}</p>
+                <p><strong>Event Type:</strong> ${alert.log_entry_sample?.event_type || 'Generic'}</p>
+              </div>
+            </div>
+            
+            <div class="ai-explanation-area" id="ai-area-${alert.id}">
+              <button class="ai-explain-btn" data-alert-id="${alert.id}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                Explain with Security AI
+              </button>
+              <div class="ai-response" style="display: none;">
+                <div class="ai-loading"><div class="spinner"></div> Analyzing threat vectors...</div>
+                <div class="ai-text"></div>
+              </div>
+            </div>
           </div>
         </td>
       `;
       alertsTableBody.appendChild(expandableRow);
     });
     totalAlertsCount.textContent = alerts.length;
+    
+    // Store alerts locally for AI explainer to access
+    window.currentAlerts = alerts;
   };
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -119,71 +112,87 @@ import './ThreatDetections.css';
     const closeModalButton = rawLogModal?.querySelector('.close-button');
     const rawLogDisplay = document.getElementById('raw-log-display');
 
-    if (!alertsTableBody || !totalAlertsCount) {
-      console.error('Required DOM elements not found');
-      return;
-    }
+    if (!alertsTableBody || !totalAlertsCount) return;
 
-    let alerts = [];
+    // Listen for real alerts from the analysis engine
+    document.addEventListener('alertsDetected', (event) => {
+      const alerts = event.detail.alerts;
+      renderAlerts(alerts);
+    });
 
-    // Event listener for expandable rows
-    alertsTableBody.addEventListener('click', (event) => {
+    // Event listener for expandable rows, modal, and AI explain button
+    alertsTableBody.addEventListener('click', async (event) => {
       const target = event.target;
+      
+      // AI Explain Button logic
+      if (target.classList.contains('ai-explain-btn') || target.closest('.ai-explain-btn')) {
+        const btn = target.classList.contains('ai-explain-btn') ? target : target.closest('.ai-explain-btn');
+        const alertId = btn.dataset.alertId;
+        const alert = window.currentAlerts.find(a => a.id === alertId);
+        
+        if (!alert) return;
+        
+        const area = btn.closest('.ai-explanation-area');
+        const responseDiv = area.querySelector('.ai-response');
+        const loadingDiv = area.querySelector('.ai-loading');
+        const textDiv = area.querySelector('.ai-text');
+        
+        btn.style.display = 'none';
+        responseDiv.style.display = 'block';
+        loadingDiv.style.display = 'flex';
+        textDiv.textContent = '';
+        
+        try {
+          const response = await fetch('http://127.0.0.1:8080/api/ai/explain-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(alert)
+          });
+          
+          if (!response.ok) throw new Error(await response.text());
+          
+          const explanation = await response.json();
+          loadingDiv.style.display = 'none';
+          textDiv.textContent = explanation;
+        } catch (error) {
+          loadingDiv.style.display = 'none';
+          textDiv.innerHTML = `<span style="color: #ff4444;">Error: ${error.message}</span>`;
+        }
+        return;
+      }
+
       const row = target.closest('.alert-row');
-      if (row) {
+      if (row && !target.classList.contains('view-raw-btn')) {
         const expandableContent = row.nextElementSibling;
         if (expandableContent && expandableContent.classList.contains('expandable-content')) {
           row.classList.toggle('expanded');
           expandableContent.classList.toggle('active');
-          
-          const svgElement = target.closest('.expand-toggle')?.querySelector('svg');
-          if (svgElement) {
-            svgElement.classList.toggle('rotated');
-          }
+          const svgElement = row.querySelector('.expand-toggle svg');
+          if (svgElement) svgElement.classList.toggle('rotated');
         }
       }
 
-      // Event listener for View Raw button
       if (target.classList.contains('view-raw-btn')) {
         const rawLog = target.dataset.rawLog;
-        if (rawLogDisplay) {
-          rawLogDisplay.textContent = rawLog;
-        }
-        if (rawLogModal) {
-          rawLogModal.style.display = 'block';
-        }
+        if (rawLogDisplay) rawLogDisplay.textContent = rawLog;
+        if (rawLogModal) rawLogModal.style.display = 'block';
       }
     });
 
-    // Close modal
-    if (closeModalButton && rawLogModal) {
+    // Close modal logic
+    if (closeModalButton) {
       closeModalButton.addEventListener('click', () => {
         rawLogModal.style.display = 'none';
       });
     }
 
-    if (rawLogModal) {
-      window.addEventListener('click', (event) => {
-        if (event.target === rawLogModal) {
-          rawLogModal.style.display = 'none';
-        }
-      });
-    }
-
-    // Add a new alert every few seconds for demonstration
-    setInterval(() => {
-      const newAlert = generateRandomLog();
-      alerts.unshift(newAlert); // Add to the beginning
-      if (alerts.length > 10) {
-        alerts.pop(); // Keep only the latest 10 alerts
+    window.addEventListener('click', (event) => {
+      if (event.target === rawLogModal) {
+        rawLogModal.style.display = 'none';
       }
-      renderAlerts(alerts);
-    }, 3000);
+    });
 
-    // Initial render
-    for (let i = 0; i < 5; i++) {
-      alerts.push(generateRandomLog());
-    }
-    renderAlerts(alerts);
+    // Initial state
+    renderAlerts([]);
   });
 </script>

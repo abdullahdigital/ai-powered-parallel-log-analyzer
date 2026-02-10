@@ -25,32 +25,38 @@ import AITextToRule from './AITextToRule.astro';
         <li class="nav-item">
           <a href="#" class="nav-link active" id="dashboard-link">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
             Dashboard
           </a>
         </li>
         <li class="nav-item">
-          <a href="#" class="nav-link" id="detection-rules-link">
+          <a href="#" class="nav-link" id="threat-detections-link">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            Detection Rules
+            Generated Alerts
           </a>
         </li>
         <li class="nav-item">
           <a href="#" class="nav-link" id="ai-text-to-rule-link">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5a3 3 0 1 0-3 3"></path>
-              <path d="M12 5a3 3 0 1 1 3 3"></path>
-              <path d="M12 7a6 6 0 0 1 6 6v3a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2 1 1 0 0 1-1-1V7a3 3 0 0 0-3-3H8a3 3 0 0 0-3 3v1a1 1 0 0 1-1 1 2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2v-3a6 6 0 0 1 6-6z"></path>
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
             </svg>
             AI Text to Rule
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" id="detection-rules-link">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            Detection Rules
           </a>
         </li>
       </ul>
@@ -65,9 +71,8 @@ import AITextToRule from './AITextToRule.astro';
         <div class="header-subtitle">Real-time log analysis and threat detection</div>
     </div>
     <div class="header-right-content">
-      <!-- Placeholder for interesting content -->
       <p>System Status: <span style="color: #4CAF50;">Operational</span></p>
-      <p>Active Alerts: <span id="active-alerts-count" style="color: #FFC107;">0</span></p>
+      <p class="clickable" id="header-alerts-trigger">Active Alerts: <span id="active-alerts-count" style="color: #FFC107; font-weight: bold;">0</span></p>
     </div>
     </header>
 
@@ -94,6 +99,7 @@ import AITextToRule from './AITextToRule.astro';
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const dashboardLink = document.getElementById('dashboard-link');
+    const threatDetectionsLink = document.getElementById('threat-detections-link');
     const detectionRulesLink = document.getElementById('detection-rules-link');
     const aiTextToRuleLink = document.getElementById('ai-text-to-rule-link');
 
@@ -102,9 +108,10 @@ import AITextToRule from './AITextToRule.astro';
     const detectionRulesContent = document.getElementById('detection-rules-content');
     const aiTextToRuleContent = document.getElementById('ai-text-to-rule-content');
     const activeAlertsSpan = document.getElementById('active-alerts-count');
+    const headerAlertsTrigger = document.getElementById('header-alerts-trigger');
 
-    const allContentSections = [dashboardContent, threatDetectionsContent, detectionRulesContent, aiTextToRuleContent];
-    const allNavLinks = [dashboardLink, detectionRulesLink, aiTextToRuleLink];
+    const allContentSections = [dashboardContent, threatDetectionsContent, aiTextToRuleContent, detectionRulesContent];
+    const allNavLinks = [dashboardLink, threatDetectionsLink, aiTextToRuleLink, detectionRulesLink];
 
     function showContent(contentToShow, activeLink) {
       allContentSections.forEach(section => {
@@ -130,6 +137,11 @@ import AITextToRule from './AITextToRule.astro';
       showContent(dashboardContent, dashboardLink);
     });
 
+    threatDetectionsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      showContent(threatDetectionsContent, threatDetectionsLink);
+    });
+
     detectionRulesLink.addEventListener('click', (e) => {
       e.preventDefault();
       showContent(detectionRulesContent, detectionRulesLink);
@@ -138,6 +150,18 @@ import AITextToRule from './AITextToRule.astro';
     aiTextToRuleLink.addEventListener('click', (e) => {
       e.preventDefault();
       showContent(aiTextToRuleContent, aiTextToRuleLink);
+    });
+
+    // Make header alerts clickable
+    if (headerAlertsTrigger) {
+      headerAlertsTrigger.addEventListener('click', () => {
+        showContent(threatDetectionsContent, threatDetectionsLink);
+      });
+    }
+
+    // Global navigation listener for other components
+    document.addEventListener('navigateToAlerts', () => {
+      showContent(threatDetectionsContent, threatDetectionsLink);
     });
 
     // Listen for custom event to update active alerts

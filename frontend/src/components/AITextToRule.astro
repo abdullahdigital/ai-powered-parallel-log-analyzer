@@ -135,3 +135,108 @@
     gap: 10px;
   }
 </style>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const generateBtn = document.getElementById('generate-rule-btn');
+    const clearBtn = document.getElementById('clear-rule-btn');
+    const approveBtn = document.getElementById('approve-rule-btn');
+    const inputArea = document.getElementById('natural-language-rule');
+    const outputArea = document.getElementById('generated-json-rule');
+
+    let currentGeneratedRule = null;
+
+    if (generateBtn) {
+      generateBtn.addEventListener('click', async () => {
+        const description = inputArea.value.trim();
+        if (!description) {
+          alert('Please enter a rule description.');
+          return;
+        }
+
+        const originalText = generateBtn.innerHTML;
+        generateBtn.innerHTML = `
+          <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+          </svg>
+          Generating...
+        `;
+        generateBtn.disabled = true;
+
+        try {
+          const response = await fetch('http://127.0.0.1:8080/api/ai/generate-rule', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ description }),
+          });
+
+          if (response.ok) {
+            const rule = await response.json();
+            currentGeneratedRule = rule;
+            outputArea.value = JSON.stringify(rule, null, 2);
+          } else {
+            const errorText = await response.text();
+            console.error('Rule generation failed:', response.status, errorText);
+            alert(`Rule generation failed: ${errorText}`);
+          }
+        } catch (error) {
+          console.error('Error during rule generation:', error);
+          alert('Error during rule generation.');
+        } finally {
+          generateBtn.innerHTML = originalText;
+          generateBtn.disabled = false;
+        }
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        inputArea.value = '';
+        outputArea.value = '';
+        currentGeneratedRule = null;
+      });
+    }
+
+    if (approveBtn) {
+      approveBtn.addEventListener('click', async () => {
+        if (!outputArea.value.trim()) {
+          alert('No rule to approve. Please generate a rule first.');
+          return;
+        }
+
+        try {
+          let ruleToApprove;
+          try {
+            ruleToApprove = JSON.parse(outputArea.value);
+          } catch (e) {
+            alert('Invalid JSON in output area. Please correct it before approving.');
+            return;
+          }
+
+          const response = await fetch('http://127.0.0.1:8080/api/rules/add', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(ruleToApprove),
+          });
+
+          if (response.ok) {
+            alert('Rule approved and added successfully!');
+            // Optionally clear or switch to rules view
+            outputArea.value = '';
+            inputArea.value = '';
+          } else {
+            const errorText = await response.text();
+            console.error('Failed to add rule:', response.status, errorText);
+            alert(`Failed to add rule: ${errorText}`);
+          }
+        } catch (error) {
+          console.error('Error adding rule:', error);
+          alert('Error adding rule.');
+        }
+      });
+    }
+  });
+</script>

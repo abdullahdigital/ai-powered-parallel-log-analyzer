@@ -11,7 +11,7 @@ impl Timer {
         }
     }
 
-    pub fn elapsed_millis(&self) -> u128 {
-        self.start_time.elapsed().as_millis()
+    pub fn elapsed_millis(&self) -> f64 {
+        self.start_time.elapsed().as_secs_f64() * 1000.0
     }
 }
