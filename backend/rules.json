@@ -80,5 +80,18 @@
     },
     "time_window_seconds": null,
     "threshold": null
+  },
+  {
+    "id": "rule_007",
+    "name": "Restricted IP Activity",
+    "pattern": "\\b10\\.0\\.0\\.2\\b",
+    "description": "Detects any log activity originating from or involving the restricted IP address 10.0.0.2",
+    "alert_type": "SuspiciousIp",
+    "enabled": true,
+    "rule_type": {
+      "Custom": "LogPattern"
+    },
+    "time_window_seconds": null,
+    "threshold": null
   }
 ]

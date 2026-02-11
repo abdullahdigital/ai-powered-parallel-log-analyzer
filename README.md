@@ -3,7 +3,7 @@
 
 An enterprise-grade, hybrid security analytics platform engineered for sub-millisecond threat detection. Built with **Rust** for safety and lightning-speed parallel processing, and integrated with **Generative AI** for automated forensic analysis.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Source Available](https://img.shields.io/badge/License-Source_Available-red.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![AI-Powered](https://img.shields.io/badge/AI-Gemini_Flash-blue.svg)](https://deepmind.google/technologies/gemini/)
 
@@ -90,8 +90,14 @@ The engine is designed for:
 
 ---
 
-## 📜 Enterprise License
-This project is released under the **MIT License**. It is designed for commercial use, integration, and modification by security-first enterprises.
+## 📜 Enterprise & Licensing
+This project is released under a **Source-Available Commercial License**. 
+
+- **Commercial Use**: Use within a business or for revenue-generating activities requires a paid license.
+- **Personal/Educational**: Free to use for learning and private research.
+- **Contributions**: Pull Requests and community contributions are highly encouraged!
+
+For commercial inquiries or special permissions, contact the author via [LinkedIn](https://www.linkedin.com/in/abdullahdigital/).
 
 ---
 

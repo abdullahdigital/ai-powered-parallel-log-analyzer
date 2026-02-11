@@ -62,6 +62,7 @@ fn read_rules_file_content(filename: &Path) -> io::Result<String> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv::dotenv().ok();
     let args = Args::parse();
 
     match args.mode.as_str() {

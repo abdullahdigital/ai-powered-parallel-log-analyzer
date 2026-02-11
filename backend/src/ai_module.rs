@@ -41,6 +41,7 @@ pub fn explain_alert(alert: serde_json::Value) -> Option<String> {
 pub fn generate_rule_from_description(description: &str) -> Result<Rule, String> {
     let script_path = std::env::var("AI_GEN_SCRIPT_PATH").unwrap_or_else(|_| "../ai_modules/rule_generator.py".to_string());
     let python_path = std::env::var("PYTHON_INTERPRETER_PATH").unwrap_or_else(|_| "python3".to_string());
+    println!("DEBUG: AI Rule Generator using Python: {}", python_path);
 
     let output = Command::new(python_path)
         .arg(script_path)
